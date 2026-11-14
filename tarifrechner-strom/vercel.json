@@ -1,7 +1,0 @@
-{
-  "functions": {
-    "api/preis.js": {
-      "includeFiles": "api/data/**"
-    }
-  }
-}
