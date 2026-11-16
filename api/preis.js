@@ -1,19 +1,21 @@
-// Ganz oben in der Datei importieren (je nach Setup mit require oder import)
-import tarifeStrom from './tarife-strom.json' assert { type: 'json' }; 
-// Falls Sie älteres Node.js nutzen: const tarifeStrom = require('./tarife-strom.json');
+import fs from 'fs';
+import path from 'path';
 
 export default async function handler(req, res) {
-  // Parameter aus der URL auslesen
   const { gruppe, sparte, plz, verbrauch } = req.query;
 
   try {
     if (sparte === "strom") {
       
-      // --- PFAD 1: OHNE BONITÄTSPRÜFUNG (Neuer Fix-Tarif) ---
+      // --- PFAD 1: OHNE BONITÄTSPRÜFUNG (Fester Tarif aus JSON) ---
       if (gruppe === "bonitaetsfrei") {
-        const tarif = tarifeStrom.strom.bonitaetsfrei;
+        // JSON-Datei zur Laufzeit aus dem Projekt-Root lesen
+        const filePath = path.join(process.cwd(), 'tarife-strom.json');
+        const jsonData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
         
-        // Monatlichen Abschlag berechnen (Grundpreis Jahr + (Verbrauch * Arbeitspreis / 100)) / 12
+        const tarif = jsonData.strom.bonitaetsfrei;
+
+        // Monatlichen Abschlag berechnen: (Grundpreis Jahr + (Verbrauch * Arbeitspreis / 100)) / 12
         const monatlich = (tarif.grundpreisJahr + (Number(verbrauch) * tarif.arbeitspreis) / 100) / 12;
 
         return res.status(200).json({
@@ -25,7 +27,7 @@ export default async function handler(req, res) {
           monatlich: monatlich,
           badge: tarif.badge,
           tarifSub: tarif.beschreibung,
-          laufzeit: tarif.laufzeit,
+          laufzeit: tarif.laufzeit, // Sollte "24 Monate" sein
           preisgarantie: tarif.preisgarantie
         });
       }
@@ -47,6 +49,7 @@ export default async function handler(req, res) {
     }
 
   } catch (error) {
+    console.error("API Fehler:", error);
     return res.status(500).json({ error: "Fehler bei der Preisberechnung" });
   }
 }
