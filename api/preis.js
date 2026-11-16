@@ -10,26 +10,28 @@ export default async function handler(req, res) {
       
       // --- PFAD 1: OHNE BONITÄTSPRÜFUNG (Fester Tarif) ---
       if (gruppe === "bonitaetsfrei") {
+        // Feste Werte exakt nach deinen Vorgaben
         const tarif = {
           anbieter: "Bundesweiter Fix-Tarif",
           tarifName: "Fix 32",
-          arbeitspreis: 32.00,
-          grundpreisJahr: 444.00, // 37 € * 12 Monate
+          arbeitspreis: 32.00,       // 32 Cent pro kWh
+          grundpreisJahr: 444.00,    // 37 € pro Monat * 12 = 444 € pro Jahr
           badge: "Garantiert ohne Schufa",
           beschreibung: "Bundesweit einheitlicher Tarif ohne Bonitätsprüfung.",
           laufzeit: "24 Monate",
           preisgarantie: "24 Monate"
         };
 
+        // Monatlichen Abschlag berechnen
         const monatlich = (tarif.grundpreisJahr + (Number(verbrauch) * tarif.arbeitspreis) / 100) / 12;
 
         return res.status(200).json({
           found: true,
           tarifName: tarif.tarifName,
           anzeigeName: tarif.anbieter,
-          arbeitspreis: tarif.arbeitspreis,
-          grundpreis: tarif.grundpreisJahr,
-          monatlich: monatlich,
+          arbeitspreis: Number(tarif.arbeitspreis),
+          grundpreis: Number(tarif.grundpreisJahr), // Wichtig: Jahreswert als Zahl!
+          monatlich: Number(monatlich),             // Wichtig: Berechneter Wert als Zahl!
           badge: tarif.badge,
           tarifSub: tarif.beschreibung,
           laufzeit: tarif.laufzeit,
@@ -39,7 +41,6 @@ export default async function handler(req, res) {
 
       // --- PFAD 2: MIT BONITÄTSPRÜFUNG (Eni aus JSON) ---
       if (gruppe === "normal") {
-        // 1. JSON-Datei zur Laufzeit einlesen
         const filePath = path.join(process.cwd(), 'api', 'data', 'enni_strom.json');
         
         if (!fs.existsSync(filePath)) {
@@ -50,33 +51,27 @@ export default async function handler(req, res) {
         const fileData = fs.readFileSync(filePath, 'utf8');
         const jsonData = JSON.parse(fileData);
 
-        // 2. Daten für die eingegebene PLZ suchen
         const plzData = jsonData[plz]; 
         
-        // Falls die PLZ nicht in der Eni-Datei existiert
         if (!plzData || !plzData[0]) {
           return res.status(200).json({ found: false, individuell: true });
         }
 
-        // 3. Werte aus dem inneren Array extrahieren
         const eniData = plzData[0]; 
         
-        // Werte zuweisen (Index 2 = Grundpreis Jahr, Index 3 = Arbeitspreis)
-        // Falls deine JSON-Datei anders aufgebaut ist, passe die Indizes [2] und [3] an!
+        // Werte aus der JSON (Index 2 = Grundpreis Jahr, Index 3 = Arbeitspreis)
         const grundpreisJahr = eniData[2] || 187.7; 
         const arbeitspreis = eniData[3] || 36.94;
         
-        // 4. Monatlichen Abschlag berechnen
         const monatlich = (grundpreisJahr + (Number(verbrauch) * arbeitspreis) / 100) / 12;
 
-        // 5. Antwort an das Frontend senden
         return res.status(200).json({
           found: true,
           tarifName: "Eni Strom",
           anzeigeName: "Eni",
-          arbeitspreis: arbeitspreis,
-          grundpreis: grundpreisJahr, // Wichtig: Der Jahreswert für den Hook
-          monatlich: monatlich,       // Der berechnete Monatswert
+          arbeitspreis: Number(arbeitspreis),
+          grundpreis: Number(grundpreisJahr), 
+          monatlich: Number(monatlich),       
           badge: "Mit Bonitätsprüfung",
           tarifSub: "Standardtarif mit Schufa-Prüfung.",
           laufzeit: "12 Monate",
@@ -85,7 +80,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // Fallback für Gas (falls diese API auch für Gas genutzt wird)
     if (sparte === "gas") {
        return res.status(200).json({ found: false, individuell: true });
     }
