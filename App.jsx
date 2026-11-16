@@ -24,8 +24,8 @@ import { usePreis } from "./usePreis";
 --------------------------------------------------------- */
 const SPARTE = "strom";
 
-/* Platzhalter für den Gastarifrechner-Link */
-const GAS_RECHNER_URL = "https://rechner.kwh-beratung.de/gas"; // BITTE ANPASSEN
+/* Link zum Gastarifrechner */
+const GAS_RECHNER_URL = "https://gasrechner.kwh-beratung.de/";
 
 /* ---------------------------------------------------------
    Design-Tokens — identisch zur Website kwh-beratung.de
@@ -992,10 +992,16 @@ export default function TarifRechner() {
                 />
               </Field>
 
-              {/* CROSS-LINK ZUM GASRECHNER */}
+              {/* CROSS-LINK ZUM GASRECHNER (NEUER TAB) */}
               <div className="pt-2 text-center">
                 <span className="text-xs" style={{ color: c.stone }}>Sie möchten stattdessen Gas vergleichen? </span>
-                <a href={GAS_RECHNER_URL} className="text-xs font-bold underline" style={{ color: c.blue }}>
+                <a 
+                  href={GAS_RECHNER_URL} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-xs font-bold underline" 
+                  style={{ color: c.blue }}
+                >
                   Hier geht's zum Gastarifrechner
                 </a>
               </div>
