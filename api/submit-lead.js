@@ -267,6 +267,79 @@ async function uploadFileToDeal(dealId, dataUrl, filename, mime) {
 }
 
 /* ---------------------------------------------------------
+   NEU: Zusammenfassende Notiz im Deal anlegen
+--------------------------------------------------------- */
+async function createDealSummaryNote(dealId, personId, payload) {
+  if (!dealId) return;
+
+  // Hilfsfunktion für leere Werte
+  const val = (v) => (v === undefined || v === null || v === "" ? "k.A." : v);
+
+  // Dokumente auflisten
+  let docList = "Keine Dateien hochgeladen";
+  if (payload.dokumente && payload.dokumente.length > 0) {
+    docList = payload.dokumente.map((d) => d.dateiname).join(", ");
+  }
+  if (payload.zaehler_foto) {
+    docList += (docList === "Keine Dateien hochgeladen" ? "" : ", ") + (payload.zaehler_foto_dateiname || "Zählerfoto");
+  }
+
+  // HTML-Struktur für die Notiz aufbauen
+  const htmlContent = `
+    <h3>📋 Zusammenfassung aus dem ${payload.sparte === "gas" ? "Gas" : "Strom"}-Tarifrechner</h3>
+    
+    <p><strong>Allgemeine Daten</strong><br>
+    Sparte: ${payload.sparte === "gas" ? "Gas" : "Strom"}<br>
+    Verbrauch: ${val(payload.verbrauch)} kWh/Jahr<br>
+    PLZ: ${val(payload.plz)}<br>
+    Wechselweg: ${val(payload.wechselgrund)}<br>
+    Gewählter Tarif: ${val(payload.tarif_name)}<br>
+    Monatlicher Abschlag: ${val(payload.abschlag_monat)}<br>
+    Arbeitspreis: ${val(payload.arbeitspreis)}<br>
+    Grundpreis: ${val(payload.grundpreis)}</p>
+    
+    <p><strong>Kontaktdaten</strong><br>
+    Name: ${val(payload.anrede)} ${val(payload.vorname)} ${val(payload.nachname)}<br>
+    E-Mail: ${val(payload.email)}<br>
+    Telefon: ${val(payload.telefon)}<br>
+    Geburtsdatum: ${val(payload.geburtsdatum)}<br>
+    Adresse: ${val(payload.strasse)} ${val(payload.hausnummer)}, ${val(payload.plz)} ${val(payload.ort)}</p>
+    
+    <p><strong>Vertrags- & Zahlungsdetails</strong><br>
+    Situation: ${payload.neueinzug ? "Neueinzug" : "Wechsel"}${
+      payload.neueinzug && payload.einzugsdatum ? ` (Einzug: ${payload.einzugsdatum})` : ""
+    }<br>
+    Aktueller Anbieter: ${val(payload.aktueller_anbieter)}<br>
+    Kundennummer alt: ${val(payload.kundennummer_alt)}<br>
+    Zahlungsart: ${payload.iban_status === "selbstzahler" ? "Selbstzahler" : "SEPA-Lastschrift"}<br>
+    IBAN: ${val(payload.iban)}<br>
+    Kontoinhaber: ${val(payload.kontoinhaber)}</p>
+    
+    <p><strong>Zählerdaten</strong><br>
+    Zählernummer: ${val(payload.zaehlernummer)}<br>
+    MaLo-ID: ${val(payload.marktlokations_id)}</p>
+    
+    <p><strong>Hochgeladene Dateien:</strong><br>
+    ${docList}</p>
+  `;
+
+  try {
+    await pd("/notes", {
+      method: "POST",
+      body: JSON.stringify({
+        deal_id: dealId,
+        person_id: personId,
+        content: htmlContent,
+      }),
+    });
+    console.log(`Zusammenfassende Notiz für Deal ${dealId} erfolgreich erstellt.`);
+  } catch (error) {
+    // Fehler beim Notiz-Erstellen sollen den Hauptprozess nicht abbrechen
+    console.error("Fehler beim Erstellen der Pipedrive-Notiz:", error);
+  }
+}
+
+/* ---------------------------------------------------------
    Handler
 --------------------------------------------------------- */
 export default async function handler(req, res) {
@@ -284,6 +357,7 @@ export default async function handler(req, res) {
     const person = await upsertPerson(payload);
     const deal = await upsertDeal(payload, person.id);
 
+    // Dateien hochladen
     if (Array.isArray(payload.dokumente)) {
       for (const doc of payload.dokumente) {
         await uploadFileToDeal(deal.id, doc.base64, doc.dateiname, doc.mimetype);
@@ -292,6 +366,9 @@ export default async function handler(req, res) {
     if (payload.zaehler_foto) {
       await uploadFileToDeal(deal.id, payload.zaehler_foto, payload.zaehler_foto_dateiname, payload.zaehler_foto_mimetype);
     }
+
+    // NEU: Zusammenfassende Notiz in Pipedrive anlegen
+    await createDealSummaryNote(deal.id, person.id, payload);
 
     return res.status(200).json({ ok: true, personId: person.id, dealId: deal.id });
   } catch (err) {
