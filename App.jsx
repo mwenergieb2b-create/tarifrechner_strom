@@ -24,6 +24,9 @@ import { usePreis } from "./usePreis";
 --------------------------------------------------------- */
 const SPARTE = "strom";
 
+/* Platzhalter für den Gastarifrechner-Link */
+const GAS_RECHNER_URL = "https://rechner.kwh-beratung.de/gas"; // BITTE ANPASSEN
+
 /* ---------------------------------------------------------
    Design-Tokens — identisch zur Website kwh-beratung.de
 --------------------------------------------------------- */
@@ -53,13 +56,6 @@ const WA_LINK =
 
 /* ---------------------------------------------------------
    Schrittfolge (Strom-Tarifrechner)
-   1. PLZ & Verbrauch
-   2. Wechselweg (mit / ohne Bonitätsprüfung + monatlicher Abschlag direkt im Feld)
-   3. Kontakt (Name, Telefon, E-Mail)
-   4. Unterlagen
-   5. Vertragsdaten
-   6. Bankdaten
-   7. Zähler -> Abschluss (Hinweis auf konkretes Angebot per E-Mail)
 --------------------------------------------------------- */
 const STEPS = [
   "basics",
@@ -81,11 +77,12 @@ const STEP_TITLES = {
   zaehler: "Zähler",
 };
 
+/* NEUE VERBRAUCHSWERTE FÜR STROM */
 const PRESETS = [
-  { label: "1 Person", kwh: 1500 },
-  { label: "2 Personen", kwh: 2400 },
-  { label: "3 Personen", kwh: 3400 },
-  { label: "4+ Personen", kwh: 4400 },
+  { label: "1 Person", kwh: 1200 },
+  { label: "2 Personen", kwh: 2000 },
+  { label: "3 Personen", kwh: 3000 },
+  { label: "4+ Personen", kwh: 4000 },
 ];
 
 /* ---------------------------------------------------------
@@ -364,7 +361,7 @@ function ToggleCard({ selected, onClick, title, sub, badge, abschlagInfo, disabl
 
           {abschlagInfo && (
             <div
-              className="mt-2.5 mb-2 rounded-xl px-3.5 py-2.5 flex items-baseline justify-between gap-2 flex-wrap"
+              className="mt-2.5 mb-2 rounded-xl px-3.5 py-2.5 flex flex-col justify-center gap-1"
               style={{
                 background: selected ? c.surface : c.bg,
                 border: `1px solid ${selected ? c.blue : c.line}`,
@@ -637,15 +634,30 @@ async function submitToPipedrive(data, submissionTyp, preis) {
   }
 }
 
+/* ---------------------------------------------------------
+   ERWEITERTE ANZEIGE FÜR ABSCHLAG, ARBEITS- & GRUNDPREIS
+--------------------------------------------------------- */
 function formatAbschlagDisplay(preisObj, plz, verbrauch) {
   if (preisObj.loading) {
     return { main: "Monatlicher Abschlag wird berechnet…", detail: "" };
   }
   if (preisObj.found && preisObj.monatlich != null) {
     const gerundet = Math.round(preisObj.monatlich);
+    
+    // Preise grob runden für die Anzeige
+    const apRounded = preisObj.arbeitspreis ? preisObj.arbeitspreis.toFixed(1).replace(".", ",") : null;
+    const gpRounded = preisObj.grundpreisMonat ? Math.round(preisObj.grundpreisMonat) : null;
+    
+    let detailStr = `bei ${Number(verbrauch).toLocaleString("de-DE")} kWh/Jahr`;
+    
+    // Wenn beide Preise vorhanden sind, in Klammern anhängen
+    if (apRounded && gpRounded) {
+      detailStr += ` (ca. ${apRounded} ct/kWh, ${gpRounded} €/Monat)`;
+    }
+
     return {
       main: `${gerundet} € monatlicher Abschlag`,
-      detail: `bei ${Number(verbrauch).toLocaleString("de-DE")} kWh/Jahr`,
+      detail: detailStr,
     };
   }
   return {
@@ -659,7 +671,7 @@ const initialData = {
   heizungstyp: "normal",
   telefon: "",
   plz: "",
-  verbrauch: 3400,
+  verbrauch: 3400, // Standard auf 3400 (ca. 3 Personen) belassen
   bonitaet: true,
   tarif: "bonitaetsfrei",
   tarifName: "",
@@ -719,8 +731,6 @@ export default function TarifRechner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  // Beide Tarife (ohne & mit Bonitätsprüfung) anhand PLZ und Verbrauch berechnen,
-  // damit beide Abschläge direkt im Schritt "Wechselweg" angezeigt werden können.
   const preisOhneBoni = usePreis("bonitaetsfrei", SPARTE, data.plz, data.verbrauch);
   const preisMitBoni = usePreis("normal", SPARTE, data.plz, data.verbrauch);
 
@@ -753,7 +763,6 @@ export default function TarifRechner() {
     const i = STEPS.indexOf(step);
     if (i < STEPS.length - 1) return goTo(STEPS[i + 1]);
 
-    // Im letzten Schritt ("zaehler") Daten an Pipedrive senden und zum Abschluss wechseln
     setSending(true);
     setSubmitError(false);
 
@@ -982,6 +991,14 @@ export default function TarifRechner() {
                   onChange={(e) => update({ verbrauch: e.target.value.replace(/\D/g, "") })}
                 />
               </Field>
+
+              {/* CROSS-LINK ZUM GASRECHNER */}
+              <div className="pt-2 text-center">
+                <span className="text-xs" style={{ color: c.stone }}>Sie möchten stattdessen Gas vergleichen? </span>
+                <a href={GAS_RECHNER_URL} className="text-xs font-bold underline" style={{ color: c.blue }}>
+                  Hier geht's zum Gastarifrechner
+                </a>
+              </div>
             </StepShell>
           )}
 
