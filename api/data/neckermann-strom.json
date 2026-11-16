@@ -1,0 +1,13 @@
+{
+  "strom": {
+    "bonitaetsfrei": {
+      "anbieter": "Bundesweiter Fix-Tarif",
+      "tarifName": "Fix 32",
+      "arbeitspreis": 32.00,
+      "grundpreisJahr": 444.00,
+      "badge": "Garantiert ohne Schufa",
+      "beschreibung": "Bundesweit einheitlicher Tarif ohne Bonitätsprüfung.",
+      "laufzeit": "24 Monate",
+    }
+  }
+}
