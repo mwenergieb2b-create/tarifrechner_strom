@@ -77,7 +77,7 @@ const STEP_TITLES = {
   zaehler: "Zähler",
 };
 
-/* NEUE VERBRAUCHSWERTE FÜR STROM */
+/* VERBRAUCHSWERTE FÜR STROM (Personen) */
 const PRESETS = [
   { label: "1 Person", kwh: 1200 },
   { label: "2 Personen", kwh: 2000 },
@@ -635,7 +635,7 @@ async function submitToPipedrive(data, submissionTyp, preis) {
 }
 
 /* ---------------------------------------------------------
-   ERWEITERTE ANZEIGE FÜR ABSCHLAG, ARBEITS- & GRUNDPREIS
+   ANGEPSASTE ANZEIGE FÜR ABSCHLAG (NUR GESCHÄTZT, OHNE PREISE)
 --------------------------------------------------------- */
 function formatAbschlagDisplay(preisObj, plz, verbrauch) {
   if (preisObj.loading) {
@@ -644,20 +644,9 @@ function formatAbschlagDisplay(preisObj, plz, verbrauch) {
   if (preisObj.found && preisObj.monatlich != null) {
     const gerundet = Math.round(preisObj.monatlich);
     
-    // Preise grob runden für die Anzeige
-    const apRounded = preisObj.arbeitspreis ? preisObj.arbeitspreis.toFixed(1).replace(".", ",") : null;
-    const gpRounded = preisObj.grundpreisMonat ? Math.round(preisObj.grundpreisMonat) : null;
-    
-    let detailStr = `bei ${Number(verbrauch).toLocaleString("de-DE")} kWh/Jahr`;
-    
-    // Wenn beide Preise vorhanden sind, in Klammern anhängen
-    if (apRounded && gpRounded) {
-      detailStr += ` (ca. ${apRounded} ct/kWh, ${gpRounded} €/Monat)`;
-    }
-
     return {
-      main: `${gerundet} € monatlicher Abschlag`,
-      detail: detailStr,
+      main: `${gerundet} € geschätzter monatlicher Abschlag`,
+      detail: `bei ${Number(verbrauch).toLocaleString("de-DE")} kWh/Jahr`,
     };
   }
   return {
@@ -671,7 +660,7 @@ const initialData = {
   heizungstyp: "normal",
   telefon: "",
   plz: "",
-  verbrauch: 3400, // Standard auf 3400 (ca. 3 Personen) belassen
+  verbrauch: 1000, // NEU: Standardverbrauch auf 1000 kWh geändert
   bonitaet: true,
   tarif: "bonitaetsfrei",
   tarifName: "",
@@ -992,17 +981,21 @@ export default function TarifRechner() {
                 />
               </Field>
 
-              {/* CROSS-LINK ZUM GASRECHNER (NEUER TAB) */}
-              <div className="pt-2 text-center">
-                <span className="text-xs" style={{ color: c.stone }}>Sie möchten stattdessen Gas vergleichen? </span>
-                <a 
-                  href={GAS_RECHNER_URL} 
-                  target="_blank" 
+              {/* CROSS-LINK ZUM GASRECHNER ALS BUTTON */}
+              <div className="pt-4 pb-2">
+                <a
+                  href={GAS_RECHNER_URL}
+                  target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs font-bold underline" 
-                  style={{ color: c.blue }}
+                  className="w-full flex items-center justify-center gap-2 rounded-full px-5 py-3.5 text-[15px] font-extrabold transition-colors no-underline"
+                  style={{
+                    background: c.blueTint,
+                    color: c.blue,
+                    border: `1.5px solid ${c.blue}`,
+                    fontFamily: fontDisplay,
+                  }}
                 >
-                  Hier geht's zum Gastarifrechner
+                  <Flame size={16} /> Lieber Gas vergleichen? Zum Gastarifrechner
                 </a>
               </div>
             </StepShell>
@@ -1013,7 +1006,7 @@ export default function TarifRechner() {
             <StepShell
               eyebrow="Ihr Wechselweg"
               title="Wie möchten Sie wechseln?"
-              subtitle="Die meisten Stromanbieter führen bei der Anmeldung eine Schufa-/Bonitätsprüfung durch. Wir bieten beide Wege inklusive Ihrem berechneten monatlichen Abschlag an:"
+              subtitle="Die meisten Stromanbieter führen bei der Anmeldung eine Schufa-/Bonitätsprüfung durch. Wir bieten beide Wege inklusive Ihrem geschätzten monatlichen Abschlag an:"
               footer={<NavButtons onBack={back} onNext={next} disabled={!canNext} />}
             >
               <ToggleCard
@@ -1031,9 +1024,13 @@ export default function TarifRechner() {
                 abschlagInfo={formatAbschlagDisplay(preisMitBoni, data.plz, data.verbrauch)}
                 sub="Der Anbieter führt die übliche Schufa-Prüfung durch. Bei negativen Einträgen kann die Anmeldung abgelehnt werden — dann müssten wir erneut ansetzen."
               />
-              <p className="text-xs leading-relaxed" style={{ color: c.stone }}>
-                Beide Wege sind für Sie kostenlos. Unsicher? Wählen Sie „Ohne Bonitätsprüfung" — das erspart im Zweifel allen Beteiligten Aufwand.
-              </p>
+              <div className="mt-4 p-4 rounded-xl" style={{ background: c.bg, border: `1px solid ${c.line}` }}>
+                <p className="text-xs leading-relaxed m-0 font-semibold" style={{ color: c.inkSoft }}>
+                  <Info size={14} className="inline mr-1 mb-0.5" />
+                  Die hier gezeigten Werte sind unverbindliche <strong>Schätzungen</strong> auf Basis Ihrer Angaben. 
+                  Die finalen Konditionen und Tarifdetails senden wir Ihnen nach Abschluss bequem per E-Mail zu.
+                </p>
+              </div>
             </StepShell>
           )}
 
@@ -1616,7 +1613,7 @@ export default function TarifRechner() {
                     </div>
                     <p className="text-xs leading-relaxed mt-1 mb-0" style={{ color: c.inkSoft }}>
                       Wir senden Ihnen alle Tarifdetails ({data.bonitaet ? "Wechsel ohne Bonitätsprüfung" : "Wechsel mit Bonitätsprüfung"}
-                      {preis.found && preis.monatlich != null ? `, ca. ${Math.round(preis.monatlich)} € monatlicher Abschlag` : ""}) per E-Mail zu. Erst nach Ihrer finalen Bestätigung wird der Wechsel ausgelöst.
+                      {preis.found && preis.monatlich != null ? `, ca. ${Math.round(preis.monatlich)} € geschätzter monatlicher Abschlag` : ""}) per E-Mail zu. Erst nach Ihrer finalen Bestätigung wird der Wechsel ausgelöst.
                     </p>
                   </div>
                 </div>
@@ -1692,6 +1689,22 @@ export default function TarifRechner() {
                   <Share2 size={16} />{" "}
                   {copied ? "Link kopiert ✓" : "Kennen Sie jemanden, der zu viel zahlt? Link teilen"}
                 </button>
+
+                {/* NEU: GASVERGLEICH AM ENDE */}
+                <a
+                  href={GAS_RECHNER_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 rounded-full px-5 py-3.5 text-[15px] font-extrabold no-underline transition-colors"
+                  style={{
+                    background: c.blueTint,
+                    color: c.blue,
+                    border: `1.5px solid ${c.blue}`,
+                    fontFamily: fontDisplay,
+                  }}
+                >
+                  <Flame size={16} /> Jetzt auch den Gasverbrauch prüfen
+                </a>
               </div>
 
               <div className="flex items-center justify-center gap-1.5 text-xs mt-6" style={{ color: c.stone }}>
