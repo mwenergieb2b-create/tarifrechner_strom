@@ -1,125 +1,52 @@
-// /api/preis.js
-// Server-seitige Tarif-Empfehlung + Preis-Lookup für den Tarifrechner.
-// Läuft als Vercel Serverless Function (ES-Module, da "type": "module").
-//
-// Empfehlungslogik (immer genau EIN Tarif, je nach Bonität + Sparte):
-//   Strom, ohne Bonitätsprüfung -> enni.landstrom
-//   Strom, mit Bonitätsprüfung  -> LichtBlick ÖkoStrom
-//   Gas,   ohne Bonitätsprüfung -> enni.landgas
-//   Gas,   mit Bonitätsprüfung  -> LichtBlick Gas 24
+// Ganz oben in der Datei importieren (je nach Setup mit require oder import)
+import tarifeStrom from './tarife-strom.json' assert { type: 'json' }; 
+// Falls Sie älteres Node.js nutzen: const tarifeStrom = require('./tarife-strom.json');
 
-import { readFileSync } from "fs";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+export default async function handler(req, res) {
+  // Parameter aus der URL auslesen
+  const { gruppe, sparte, plz, verbrauch } = req.query;
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const enni_strom = JSON.parse(readFileSync(join(__dirname, "data/enni_strom.json"), "utf-8"));
-const enni_gas = JSON.parse(readFileSync(join(__dirname, "data/enni_gas.json"), "utf-8"));
-const lichtblick_strom = JSON.parse(readFileSync(join(__dirname, "data/lichtblick_strom.json"), "utf-8"));
-const lichtblick_gas = JSON.parse(readFileSync(join(__dirname, "data/lichtblick_gas.json"), "utf-8"));
-
-const TABLES = { enni_strom, enni_gas, lichtblick_strom, lichtblick_gas };
-
-// tarifName    = vollständiger interner Name (geht in den Payload / Pipedrive)
-// anzeigeName  = was der Kunde sieht (bewusst OHNE Anbieternamen)
-const TARIF_INFO = {
-  enni_strom: {
-    tarifName: "enni.landstrom",
-    anzeigeName: "LandStrom",
-    tarifSub: "Bonitätsfreier Stromtarif, deutschlandweit verfügbar",
-    badge: "Keine Bonitätsprüfung",
-    laufzeit: "12 Monate Laufzeit",
-    preisgarantie: "Preisgarantie",
-  },
-  enni_gas: {
-    tarifName: "enni.landgas",
-    anzeigeName: "LandGas",
-    tarifSub: "Bonitätsfreier Gastarif, deutschlandweit verfügbar",
-    badge: "Keine Bonitätsprüfung",
-    laufzeit: "12 Monate Laufzeit",
-    preisgarantie: "Preisgarantie",
-  },
-  lichtblick_strom: {
-    tarifName: "LichtBlick ÖkoStrom",
-    anzeigeName: "ÖkoStrom",
-    tarifSub: "Ökostromtarif, bundesweit verfügbar",
-    badge: "Bonitätsprüfung durch Anbieter üblich",
-    laufzeit: "12 Monate Laufzeit",
-    preisgarantie: "Preisgarantie",
-  },
-  lichtblick_gas: {
-    tarifName: "LichtBlick Gas 24",
-    anzeigeName: "Gas 24",
-    tarifSub: "Gastarif, bundesweit verfügbar",
-    badge: "Bonitätsprüfung durch Anbieter üblich",
-    laufzeit: "24 Monate Laufzeit",
-    preisgarantie: "Preisgarantie",
-  },
-};
-
-function resolveTarif(gruppe, sparte) {
-  if (sparte === "strom") {
-    return gruppe === "bonitaetsfrei" ? "enni_strom" : "lichtblick_strom";
-  }
-  return gruppe === "bonitaetsfrei" ? "enni_gas" : "lichtblick_gas";
-}
-
-function lookupBand(table, plz, verbrauch) {
-  const bands = table[plz];
-  if (!bands || bands.length === 0) return null;
-  const v = Number(verbrauch) || 0;
-  for (const [von, bis, grund, arbeit] of bands) {
-    if (v >= von && v <= bis) return { grund, arbeit };
-  }
-  // Verbrauch außerhalb aller Bänder -> passendes Randband wählen
-  if (v < bands[0][0]) {
-    const [, , grund, arbeit] = bands[0];
-    return { grund, arbeit };
-  }
-  const [, , grund, arbeit] = bands[bands.length - 1];
-  return { grund, arbeit };
-}
-
-export default function handler(req, res) {
   try {
-    const { gruppe, sparte, plz, verbrauch } = req.query;
+    if (sparte === "strom") {
+      
+      // --- PFAD 1: OHNE BONITÄTSPRÜFUNG (Neuer Fix-Tarif) ---
+      if (gruppe === "bonitaetsfrei") {
+        const tarif = tarifeStrom.strom.bonitaetsfrei;
+        
+        // Monatlichen Abschlag berechnen (Grundpreis Jahr + (Verbrauch * Arbeitspreis / 100)) / 12
+        const monatlich = (tarif.grundpreisJahr + (Number(verbrauch) * tarif.arbeitspreis) / 100) / 12;
 
-    if (!plz || !/^\d{5}$/.test(plz)) {
-      res.status(400).json({ found: false, error: "Ungültige oder fehlende PLZ" });
-      return;
-    }
-    if (gruppe !== "bonitaetsfrei" && gruppe !== "normal") {
-      res.status(400).json({ found: false, error: "gruppe muss 'bonitaetsfrei' oder 'normal' sein" });
-      return;
-    }
-    if (sparte !== "strom" && sparte !== "gas") {
-      res.status(400).json({ found: false, error: "sparte muss 'strom' oder 'gas' sein" });
-      return;
+        return res.status(200).json({
+          found: true,
+          tarifName: tarif.tarifName,
+          anzeigeName: tarif.anbieter,
+          arbeitspreis: tarif.arbeitspreis,
+          grundpreis: tarif.grundpreisJahr, // Wichtig: Hook erwartet Jahreswert
+          monatlich: monatlich,
+          badge: tarif.badge,
+          tarifSub: tarif.beschreibung,
+          laufzeit: tarif.laufzeit,
+          preisgarantie: tarif.preisgarantie
+        });
+      }
+
+      // --- PFAD 2: MIT BONITÄTSPRÜFUNG (Eni) ---
+      if (gruppe === "normal") {
+        // HIER KOMMT IHR BESTEHENDER CODE FÜR ENI REIN
+        // (Die Logik, die aktuell die Eni-Preise aus Ihrer Datenbank/JSON lädt)
+        
+        // ... Ihr Eni-Abfrage-Code ...
+        
+        // return res.status(200).json({ ... Eni Daten ... });
+      }
     }
 
-    const resolved = resolveTarif(gruppe, sparte);
-    const table = TABLES[resolved];
-    const info = TARIF_INFO[resolved];
-    const result = lookupBand(table, plz, verbrauch);
-
-    if (!result) {
-      res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=3600");
-      res.status(200).json({ found: false, tarif: resolved, ...info });
-      return;
+    // Fallback für Gas (falls diese API auch für Gas genutzt wird)
+    if (sparte === "gas") {
+       // ... Ihre bestehende Gas-Logik ...
     }
 
-    res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=3600");
-    res.status(200).json({
-      found: true,
-      tarif: resolved,
-      ...info,
-      grundpreis: result.grund,
-      arbeitspreis: result.arbeit,
-    });
-  } catch (err) {
-    console.error("Fehler in /api/preis:", err);
-    res.status(500).json({ found: false, error: "Interner Fehler bei der Preisermittlung" });
+  } catch (error) {
+    return res.status(500).json({ error: "Fehler bei der Preisberechnung" });
   }
 }
